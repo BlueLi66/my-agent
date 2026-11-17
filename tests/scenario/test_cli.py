@@ -1,5 +1,7 @@
 import asyncio
+import os
 import signal
+from types import SimpleNamespace
 
 from my_agent.cli import app
 
@@ -47,3 +49,31 @@ def test_cli_ctrl_c_closes_the_inflight_stream(tmp_path, monkeypatch, capsys, an
     assert "Cancelled." in captured.err
     assert client.closed_streams == 1
     assert client.closed
+
+
+def test_cli_registers_permission_and_requests_terminal_approval(tmp_path, monkeypatch, anthropic_client, api_reply):
+    path = tmp_path / "approved.txt"
+    path.touch()
+    command = "del /q approved.txt" if os.name == "nt" else "rm approved.txt"
+    client = anthropic_client(
+        (["Removing"], api_reply("Removing", calls=[("id", "bash", {"command": command})])),
+        (["Finished"], api_reply("Finished")),
+    )
+    monkeypatch.setattr(app, "AsyncAnthropic", lambda **options: client)
+    monkeypatch.setattr(app.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("MODEL_ID", "test-model")
+    inputs = iter(["remove the test file", "y", "exit"])
+    prompts = []
+
+    def read(prompt):
+        prompts.append(prompt)
+        return next(inputs)
+
+    monkeypatch.setattr("builtins.input", read)
+    assert app.main(["-C", str(tmp_path)]) == 0
+
+    assert "[permission] bash" in prompts[1]
+    assert command in prompts[1]
+    assert not path.exists()
+    assert client.requests[1]["messages"][-1]["content"][0]["is_error"] is False

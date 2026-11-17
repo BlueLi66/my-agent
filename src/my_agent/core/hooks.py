@@ -130,7 +130,13 @@ class HookDispatcher:
 
     async def on_user_input(self, ctx: RunContext, text: str) -> InputAction:
         for ext in self._extensions:
-            action = await ext.on_user_input(ctx, text)
+            try:
+                action = await ext.on_user_input(ctx, text)
+            except Cancelled:
+                raise
+            except Exception as error:
+                await _report_error(ctx, ext, "on_user_input", error)
+                return InputHandled(f"Input blocked by {ext.name}: {error}")
             if isinstance(action, InputHandled):
                 return action
             if isinstance(action, InputPass):

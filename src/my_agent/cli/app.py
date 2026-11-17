@@ -9,7 +9,6 @@ from uuid import uuid4
 from anthropic import AsyncAnthropic
 
 from my_agent.config import ConfigError, load_config
-from my_agent.core.approval import DefaultApprovalBroker
 from my_agent.core.cancel import CancelToken
 from my_agent.core.context import RunContext
 from my_agent.core.errors import ModelError
@@ -17,11 +16,14 @@ from my_agent.core.events import EventBus
 from my_agent.core.hooks import HookDispatcher
 from my_agent.core.loop import submit
 from my_agent.core.session import Session
+from my_agent.extensions.permission import PermissionExtension
+from my_agent.extensions.user_hooks import HookConfigError, UserHooksExtension
 from my_agent.persistence.store import InMemorySessionStore
 from my_agent.provider.anthropic import AnthropicProvider
 from my_agent.tools.builtin import builtin_tools
 from my_agent.tools.registry import ToolRegistry
 
+from .approval import TerminalApprovalBroker
 from .render import ConsoleRenderer
 
 
@@ -35,23 +37,27 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"Workspace does not exist: {workdir}")
     try:
         config = load_config(workdir, env_file=args.env_file)
-    except ConfigError as error:
+        user_hooks = UserHooksExtension.from_workdir(workdir)
+    except (ConfigError, HookConfigError) as error:
         parser.error(str(error))
 
     client = AsyncAnthropic(api_key=config.api_key, base_url=config.base_url, max_retries=0)
     shell = "cmd.exe" if os.name == "nt" else "sh"
+    tools = builtin_tools()
+    renderer = ConsoleRenderer(sys.stdout)
     events = EventBus()
-    events.subscribe(ConsoleRenderer(sys.stdout))
+    events.subscribe(renderer)
     ctx = RunContext(
         session=Session(uuid4().hex),
         provider=AnthropicProvider(client, config.model_id, fallback_model=config.fallback_model_id),
-        tools=ToolRegistry(builtin_tools()),
-        hooks=HookDispatcher(),
+        tools=ToolRegistry(tools),
+        hooks=HookDispatcher([PermissionExtension({tool.name: tool.side_effect for tool in tools}), user_hooks]),
         events=events,
-        approval=DefaultApprovalBroker(),
+        approval=TerminalApprovalBroker(renderer),
         store=InMemorySessionStore(),
         cancel=CancelToken(),
         workdir=workdir,
+        is_interactive=sys.stdin.isatty(),
         system_prompt=(
             f"You are a coding agent working in {workdir}. Use the file tools for workspace edits. "
             f"The bash tool uses {shell}; use that shell's syntax."
@@ -70,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
                 outcome = runner.run(submit(ctx, text))
                 if outcome.direct_reply is not None:
                     print(outcome.direct_reply)
+                if ctx.session.status == "cancelled":
+                    print("Cancelled.", file=sys.stderr)
+                    return 130
                 if ctx.session.status == "max_turns":
                     print("Run limit reached.", file=sys.stderr)
         except EOFError:

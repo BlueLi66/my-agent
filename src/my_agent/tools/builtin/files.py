@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..base import ToolEnv, ToolExecutionError
-from ..paths import safe_path
+from ..paths import safe_path, workspace_glob_pattern
 
 
 async def read_file(args: dict[str, Any], env: ToolEnv) -> str:
@@ -45,9 +45,7 @@ async def edit_file(args: dict[str, Any], env: ToolEnv) -> str:
 
 
 def _glob_matcher(pattern: str) -> re.Pattern[str]:
-    if Path(pattern).anchor or ".." in Path(pattern).parts:
-        raise ValueError("Glob patterns must stay within the workspace")
-    normalized = Path(pattern).as_posix()
+    normalized = workspace_glob_pattern(pattern)
     regex = globlib.translate(normalized, recursive=True, include_hidden=True, seps="/")
     return re.compile(regex, re.IGNORECASE if os.name == "nt" else 0)
 
