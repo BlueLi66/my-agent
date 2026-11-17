@@ -9,6 +9,29 @@ from my_agent.tools.base import Tool
 
 
 @pytest.mark.asyncio
+async def test_submit_resets_run_limit_and_keeps_cumulative_session_turn(make_context):
+    replies = [
+        ModelResponse(Message("assistant", [TextBlock(text)]), Usage(), "end_turn")
+        for text in ("first reply", "second reply")
+    ]
+    ctx = make_context(replies)
+    ctx.limits = RunLimits(max_turns=1)
+
+    await submit(ctx, "first question")
+    assert ctx.session.status == "done"
+    assert ctx.session.turn == 1
+    await submit(ctx, "second question")
+
+    assert ctx.session.status == "done"
+    assert ctx.session.turn == 2
+    assert [item.turn for item in ctx.store.checkpoints] == [1, 2]
+    assert ctx.provider.requests[1].messages == [
+        Message("user", [TextBlock("first question")]), replies[0].message,
+        Message("user", [TextBlock("second question")]),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_limits_bound_stop_continuations(make_context):
     class KeepGoing(Extension):
         async def before_stop(self, ctx, resp):

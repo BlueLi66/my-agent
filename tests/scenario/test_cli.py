@@ -1,0 +1,49 @@
+import asyncio
+import signal
+
+from my_agent.cli import app
+
+
+def test_cli_prints_deltas_and_quits_cleanly(tmp_path, monkeypatch, capsys, anthropic_client, api_reply):
+    client = anthropic_client((["Hel", "lo"], api_reply("Hello")))
+
+    def create_client(**options):
+        assert options["max_retries"] == 0
+        return client
+
+    monkeypatch.setattr(app, "AsyncAnthropic", create_client)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("MODEL_ID", "test-model")
+    inputs = iter(["hello", "exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(inputs))
+
+    assert app.main(["-C", str(tmp_path)]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == "Hello\n"
+    assert captured.err == ""
+    assert client.closed
+    assert [tool["name"] for tool in client.requests[0]["tools"]] == [
+        "bash", "edit_file", "glob", "grep", "read_file", "write_file",
+    ]
+
+
+def test_cli_ctrl_c_closes_the_inflight_stream(tmp_path, monkeypatch, capsys, anthropic_client):
+    async def interrupt():
+        yield "partial"
+        signal.raise_signal(signal.SIGINT)
+        await asyncio.Future()
+
+    client = anthropic_client((interrupt, None))
+    monkeypatch.setattr(app, "AsyncAnthropic", lambda **options: client)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("MODEL_ID", "test-model")
+    monkeypatch.setattr("builtins.input", lambda prompt: "ask")
+
+    assert app.main(["-C", str(tmp_path)]) == 130
+
+    captured = capsys.readouterr()
+    assert captured.out == "partial\n"
+    assert "Cancelled." in captured.err
+    assert client.closed_streams == 1
+    assert client.closed

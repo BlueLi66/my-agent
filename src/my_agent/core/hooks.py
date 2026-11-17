@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from .approval import ApprovalResult
 from .errors import Cancelled, ModelError
 from .events import HookError
 from .types import ModelResponse, ToolCall, ToolResult
@@ -76,6 +77,11 @@ class Extension:
     async def before_tool(self, ctx: RunContext, call: ToolCall) -> Decision | None:
         return None
 
+    async def on_tool_approved(
+        self, ctx: RunContext, call: ToolCall, result: ApprovalResult
+    ) -> None:
+        pass
+
     async def after_tool(
         self, ctx: RunContext, call: ToolCall, result: ToolResult
     ) -> ToolResult | None:
@@ -120,7 +126,7 @@ class HookDispatcher:
 
     async def on_session_start(self, ctx: RunContext) -> None:
         for ext in self._extensions:
-            await _observe(ctx, ext, "on_session_start", lambda: ext.on_session_start(ctx))
+            await _observe(ctx, ext, "on_session_start", lambda e=ext: e.on_session_start(ctx))
 
     async def on_user_input(self, ctx: RunContext, text: str) -> InputAction:
         for ext in self._extensions:
@@ -137,9 +143,9 @@ class HookDispatcher:
 
     async def after_model(self, ctx: RunContext, resp: ModelResponse) -> None:
         for ext in self._extensions:
-            await _observe(ctx, ext, "after_model", lambda: ext.after_model(ctx, resp))
+            await _observe(ctx, ext, "after_model", lambda e=ext: e.after_model(ctx, resp))
 
-    async def before_tool(self, ctx: RunContext, call: ToolCall) -> Allow | Deny:
+    async def before_tool(self, ctx: RunContext, call: ToolCall) -> Allow | Deny | ApprovalResult:
         requests: list[tuple[Extension, Ask]] = []
         for ext in self._extensions:
             try:
@@ -156,6 +162,7 @@ class HookDispatcher:
             if isinstance(decision, Ask):
                 requests.append((ext, decision))
 
+        approved: ApprovalResult | None = None
         for ext, request in requests:
             if not ctx.is_interactive:
                 return Deny("Tool approval requires an interactive run.")
@@ -176,12 +183,22 @@ class HookDispatcher:
             ctx.cancel.raise_if_cancelled()
             if approval.choice not in ("allow_once", "allow_session"):
                 return Deny(approval.reason or request.prompt)
+            if approved is None or approval.choice == "allow_once":
+                approved = approval
 
-        return Allow()
+        if approved is None:
+            return Allow()
+        for ext in self._extensions:
+            await _observe(
+                ctx, ext, "on_tool_approved", lambda e=ext: e.on_tool_approved(ctx, call, approved)
+            )
+        return approved
 
     async def after_tool(self, ctx: RunContext, call: ToolCall, result: ToolResult) -> ToolResult:
         for ext in self._extensions:
-            replacement = await _observe(ctx, ext, "after_tool", lambda: ext.after_tool(ctx, call, result))
+            replacement = await _observe(
+                ctx, ext, "after_tool", lambda e=ext, r=result: e.after_tool(ctx, call, r)
+            )
             if replacement is not None:
                 if replacement.call_id == call.id:
                     result = replacement
@@ -206,10 +223,10 @@ class HookDispatcher:
 
     async def on_model_error(self, ctx: RunContext, error: ModelError, req: ModelRequest) -> bool:
         for ext in self._extensions:
-            if await _observe(ctx, ext, "on_model_error", lambda: ext.on_model_error(ctx, error, req)):
+            if await _observe(ctx, ext, "on_model_error", lambda e=ext: e.on_model_error(ctx, error, req)):
                 return True
         return False
 
     async def on_session_end(self, ctx: RunContext) -> None:
         for ext in self._extensions:
-            await _observe(ctx, ext, "on_session_end", lambda: ext.on_session_end(ctx))
+            await _observe(ctx, ext, "on_session_end", lambda e=ext: e.on_session_end(ctx))

@@ -29,8 +29,8 @@ async def submit(ctx: RunContext, user_text: str) -> SubmitOutcome:
     return SubmitOutcome(session=await run(ctx))
 
 
-def _limit_reached(ctx: RunContext) -> bool:
-    if ctx.session.turn >= ctx.limits.max_turns:
+def _limit_reached(ctx: RunContext, run_turns: int) -> bool:
+    if run_turns >= ctx.limits.max_turns:
         return True
 
     budget = ctx.limits.max_tokens_budget
@@ -63,6 +63,7 @@ async def _run_one_tool(ctx: RunContext, call: ToolCall) -> ToolResult:
 async def run(ctx: RunContext) -> Session:
     session = ctx.session
     session.status = "running"
+    run_turns = 0
     max_tokens_override: int | None = None
     continuations = 0
     retried_model_error = False
@@ -72,11 +73,12 @@ async def run(ctx: RunContext) -> Session:
         await ctx.hooks.on_session_start(ctx)
         while True:
             ctx.cancel.raise_if_cancelled()
-            if _limit_reached(ctx):
+            if _limit_reached(ctx, run_turns):
                 session.status = "max_turns"
                 await ctx.store.save_status(session)
                 break
 
+            run_turns += 1
             request = build_request(ctx, max_tokens_override)
             await ctx.hooks.before_model(ctx, request)
             ctx.cancel.raise_if_cancelled()

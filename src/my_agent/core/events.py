@@ -34,6 +34,12 @@ class ModelFinished(Event):
 
 
 @dataclass(frozen=True)
+class ModelRetry(Event):
+    delay_s: float
+    status_code: int | None = None
+
+
+@dataclass(frozen=True)
 class TextDelta(Event):
     delta: str
 

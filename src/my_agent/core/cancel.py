@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from weakref import WeakSet
 
 from .errors import Cancelled
@@ -19,6 +20,22 @@ class CancelToken:
     def raise_if_cancelled(self) -> None:
         if self._reason is not None:
             raise Cancelled(self._reason)
+
+    async def run[T](self, operation: Callable[[], Awaitable[T]]) -> T:
+        """Cancel an awaited operation and let its cleanup complete."""
+        self.raise_if_cancelled()
+        task = asyncio.ensure_future(operation())
+        unsubscribe = self.on_cancel(task.cancel)
+        try:
+            result = await task
+            self.raise_if_cancelled()
+            return result
+        except asyncio.CancelledError:
+            if not asyncio.current_task().cancelling():
+                self.raise_if_cancelled()
+            raise
+        finally:
+            unsubscribe()
 
     def child(self) -> "CancelToken":
         child = CancelToken()

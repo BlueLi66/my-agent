@@ -6,6 +6,10 @@ from typing import Any, Literal
 from my_agent.core.cancel import CancelToken
 
 
+class ToolExecutionError(Exception):
+    """A tool completed with an error that should be returned to the model."""
+
+
 @dataclass
 class ToolEnv:
     workdir: Path

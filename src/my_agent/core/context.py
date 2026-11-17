@@ -26,10 +26,13 @@ class ModelRequest:
     injections: list[Message] = field(default_factory=list)
     max_tokens: int = 8000
     model: str | None = None
+    session_id: str = ""
 
 
 @dataclass
 class RunLimits:
+    """Limit model-loop steps per run and token usage across the session."""
+
     max_turns: int = 50
     max_tokens_budget: int | None = None
 
@@ -69,7 +72,9 @@ class RunContext:
 
 
 def build_request(ctx: RunContext, max_tokens_override: int | None = None) -> ModelRequest:
-    request = ModelRequest(ctx.system_prompt, ctx.tools.specs(), deepcopy(ctx.session.messages))
+    request = ModelRequest(
+        ctx.system_prompt, ctx.tools.specs(), deepcopy(ctx.session.messages), session_id=ctx.session.id
+    )
     if max_tokens_override is not None:
         request.max_tokens = max_tokens_override
     return request
