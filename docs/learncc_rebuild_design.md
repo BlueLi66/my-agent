@@ -1,14 +1,14 @@
 # Learn CC 工程化重建：设计方案（阶段 B · v2）
 
 > [!NOTE]
-> **v2 修订说明**：本方案已对齐本地 [learn-claude-code](file:///d:/LearnCC/learn-claude-code/SUMMARY.md) 仓库真实的 **17 课主线（`s01`–`s17`）**，并结合对全机制集成原型 [s15_integrated_harness/code.py](file:///d:/LearnCC/learn-claude-code/s15_integrated_harness/code.py) 及 [s16](file:///d:/LearnCC/learn-claude-code/s16_workflow_runtime/README.zh.md)/[s17](file:///d:/LearnCC/learn-claude-code/s17_goal_loop/README.zh.md) 的源码分析，明确了重建边界与架构升级点。
+> **v2 修订说明**：本方案已对齐参考仓库 `../learn-claude-code`（[SUMMARY.md](https://github.com/shareAI-lab/learn-claude-code/blob/main/SUMMARY.md)）真实的 **17 课主线（`s01`–`s17`）**，并结合对全机制集成原型 `s15_integrated_harness/code.py` 及 `s16_workflow_runtime` / `s17_goal_loop` 的源码分析，明确了重建边界与架构升级点。
 >
 > **已确认技术基线（阶段 B）**：
 > - 语言与环境：**Python 3.11+（本机 3.13.2）+ `asyncio` + `uv` 管理独立 `.venv` + `src/` 布局**
 > - 核心依赖：**极简零框架路线（D1）**——仅保留 `anthropic>=0.25.0`、`python-dotenv`、`pyyaml`，测试使用 `pytest` / `pytest-asyncio`
 > - 流式输出：**M1 即原生接入**（通过 `Provider` 与 `EventBus` 推流式事件）
 > - 模型与配置：先接 **Anthropic SDK**，配置沿用分级 `.env`（支持 `ANTHROPIC_BASE_URL`、`FALLBACK_MODEL_ID`、`GOAL_EVALUATOR_MODEL_ID`），`provider` 层预留中立接口
-> - 推进路线：先完成 **M0–M4**（`s01`–`s09` + 持久化），随后继续 **M5/M6**（`s10`–`s17` 模块化扩展），再切入阶段 C；其余暂缓优化项统一记录于 [backlog.md](file:///d:/LearnCC/my-agent/docs/backlog.md)
+> - 推进路线：先完成 **M0–M4**（`s01`–`s09` + 持久化），随后继续 **M5/M6**（`s10`–`s17` 模块化扩展），再切入阶段 C；其余暂缓优化项统一记录于 [backlog.md](./backlog.md)
 
 ---
 
@@ -81,7 +81,7 @@ flowchart TD
 
 ---
 
-## 3. 目录结构 (`d:\LearnCC\my-agent`)
+## 3. 目录结构 (`my-agent/`)
 
 ```text
 my-agent/
@@ -561,7 +561,7 @@ class Tool:
 
 1. **会话头（创建时写 1 行）**：
    ```json
-   {"v": 1, "type": "session_meta", "session_id": "ses_01J...", "parent_id": null, "workdir": "D:/LearnCC/my-agent", "created_at": "2026-11-17T13:05:00+08:00"}
+   {"v": 1, "type": "session_meta", "session_id": "ses_01J...", "parent_id": null, "workdir": "/path/to/workspace", "created_at": "2026-11-17T13:05:00+08:00"}
    ```
 2. **回合检查点（每完成一个闭合回合追加 1 行）**：
    ```json
@@ -667,7 +667,7 @@ tests/scenario/test_compaction_keeps_todo.py
 
 ## 12. 已确认的技术决策（M0 前拍板结果）
 
-1. **技术栈与依赖**：确认采用 `Python 3.13 + asyncio` + `uv` 管理独立 `.venv` + `src/` 包布局；核心运行时维持 **D1 极简依赖**（`anthropic`、`python-dotenv`、`pyyaml`），测试采用 `pytest`（+ `pytest-asyncio`）。轻量依赖增强（`pydantic`/`jsonschema`/`rich`）与同步/多线程并发模型重评已归档至 [backlog.md](file:///d:/LearnCC/my-agent/docs/backlog.md)。
+1. **技术栈与依赖**：确认采用 `Python 3.13 + asyncio` + `uv` 管理独立 `.venv` + `src/` 包布局；核心运行时维持 **D1 极简依赖**（`anthropic`、`python-dotenv`、`pyyaml`），测试采用 `pytest`（+ `pytest-asyncio`）。轻量依赖增强（`pydantic`/`jsonschema`/`rich`）与同步/多线程并发模型重评已归档至 [backlog.md](./backlog.md)。
 2. **流式输出时机**：确认 **M1 即接入流式输出**，尽早定型 `Provider` 与 `EventBus` 事件契约。
 3. **M4 之后的节奏**：确认 **M4 验收通过后继续完成 M5/M6**（`s10`–`s17` 模块化扩展），再进入阶段 C。
-4. **API 配置方案**：确认采用 **分级 `.env` + 角色模型拆分**（兼容 `ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`MODEL_ID`，并预留 `FALLBACK_MODEL_ID` 与 `GOAL_EVALUATOR_MODEL_ID`）；多 Profile (`config.toml`) 与多模型协议适配记录至 [backlog.md](file:///d:/LearnCC/my-agent/docs/backlog.md) 留待后续扩展。
+4. **API 配置方案**：确认采用 **分级 `.env` + 角色模型拆分**（兼容 `ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`MODEL_ID`，并预留 `FALLBACK_MODEL_ID` 与 `GOAL_EVALUATOR_MODEL_ID`）；多 Profile (`config.toml`) 与多模型协议适配记录至 [backlog.md](./backlog.md) 留待后续扩展。

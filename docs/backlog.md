@@ -5,7 +5,7 @@
 > 在真实软件工程项目中，这类专门存放“当下有意推迟（Deferred）、留待后续优化再评估”的文档，通常叫做 **`BACKLOG.md`**、**`docs/backlog.md`** 或 **`docs/future-enhancements.md`**。
 >
 > 它和本项目另外两类文档的分工如下：
-> - **[learncc_rebuild_design.md](file:///d:/LearnCC/my-agent/docs/learncc_rebuild_design.md)**：当前阶段要落地的正式设计蓝图（What we build now）；
+> - **[learncc_rebuild_design.md](./learncc_rebuild_design.md)**：当前阶段要落地的正式设计蓝图（What we build now）；
 > - **`docs/design-log/`**（工程上称为 **ADR**, Architecture Decision Records）：记录某项具体设计“为什么选 A 不选 B”的决策背景与代价；
 > - **本文档（`docs/backlog.md`）**：集中记录**暂时不进入当前主线、但有明确价值和触发条件的优化备选方案**，既避免遗忘，也防止在 M0–M2 阶段过度设计（YAGNI）。
 
@@ -35,7 +35,7 @@
 
 ## 二、阶段 B 刻意暂缓、留待阶段 C 的工程优化项
 
-以下能力已在 [learncc_rebuild_design.md](file:///d:/LearnCC/my-agent/docs/learncc_rebuild_design.md) 中明确划出阶段 B 范围，集中列在这里便于后续排期：
+以下能力已在 [learncc_rebuild_design.md](./learncc_rebuild_design.md) 中明确划出阶段 B 范围，集中列在这里便于后续排期：
 
 | 类别 | 暂缓项 | 预期收益 | 建议触发时机 |
 |---|---|---|---|
